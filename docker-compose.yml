@@ -1,0 +1,11 @@
+version: '3.1'
+
+services:
+  db:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: jpa-learning-test
+    ports:
+      - "3311:3306"
