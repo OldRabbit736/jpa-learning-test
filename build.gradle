@@ -22,6 +22,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     runtimeOnly 'com.mysql:mysql-connector-j'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    implementation 'com.github.gavlyukovskiy:p6spy-spring-boot-starter:1.9.1'
 
     // lombok
     compileOnly 'org.projectlombok:lombok'

@@ -109,12 +109,15 @@ public class OptimisticTest {
                 assertThat(foundArticle2.getVersion()).isEqualTo(0); // 조회 시 verion 0
 
                 foundArticle2.setTitle("타이틀2");
-                em2.getTransaction().commit(); // 커밋 시 자동 버전 변경 version 0 -> 1
+                // 커밋 시 자동 버전 변경 version 0 -> 1
+                // update article set title='타이틀2',version=1 where id=1 and version=0;
+                em2.getTransaction().commit();
                 log.info("트랜잭션2 종료");
             });
         }
 
         // then - 트랜잭션1에서 조회한 엔티티를 커밋 시점에 버전 체크 하는데, 트랜잭션2가 버전을 변경하였으므로 예외 발생
+        // select version as version_ from article where id=1;
         assertThatThrownBy(() -> em1.getTransaction().commit())
                 .isInstanceOf(RollbackException.class)
                 .hasCauseExactlyInstanceOf(OptimisticLockException.class);
