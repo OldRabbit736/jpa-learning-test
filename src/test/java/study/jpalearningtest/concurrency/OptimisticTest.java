@@ -5,7 +5,7 @@ import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.RollbackException;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.log4j.Log4j2;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,14 +15,15 @@ import org.springframework.test.annotation.Commit;
 import org.springframework.transaction.annotation.Transactional;
 import study.jpalearningtest.entity.Article;
 import study.jpalearningtest.repository.ArticleRepository;
+import study.jpalearningtest.service.ArticleService;
 
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.*;
 
-@Transactional
-@Slf4j
+@Log4j2
 @SpringBootTest
 public class OptimisticTest {
 
@@ -32,11 +33,16 @@ public class OptimisticTest {
     EntityManager em;
     @Autowired
     EntityManagerFactory emf;
+    @Autowired
+    ArticleService articleService;
 
     @BeforeEach
     void setup() {
+        articleRepository.deleteAll();
+        log.info("setup complete");
     }
 
+    @Transactional
     @DisplayName("Integer version 시작 값은 0이다.")
     @Test
     void versionStartsFromZero() {
@@ -49,6 +55,7 @@ public class OptimisticTest {
         assertThat(foundArticle.getVersion()).isEqualTo(0);
     }
 
+    @Transactional
     @DisplayName("LockModeType.None 모드에서는 버저닝 된 엔티티 수정 시에 버전이 올라간다.")
     @Test
     void noneMode_1() {
@@ -59,17 +66,18 @@ public class OptimisticTest {
 
         Article foundArticle = em.find(Article.class, article.getId());
         foundArticle.setTitle("타이틀2");
-        em.flush();
+        em.flush(); // update article set title='타이틀2',version=1 where id=1 and version=0;
         em.clear();
 
         Article foundArticle2 = em.find(Article.class, foundArticle.getId());
         assertThat(foundArticle2.getVersion()).isEqualTo(1);
     }
 
+    @Transactional
     @Commit
     @DisplayName("LockModeType.OPTIMISTIC 모드에서는 조회한 엔티티도 트랜잭션 커밋 시 버전 체크한다.")
     @Test
-    void optimisticMode() {
+    void optimisticMode_thenCheckVersionOnRead() {
         Article article = new Article("타이틀");
         em.persist(article);
         em.flush();
@@ -77,11 +85,12 @@ public class OptimisticTest {
 
         Article foundArticle = em.find(Article.class, article.getId(),
                 LockModeType.OPTIMISTIC);
+        // 커밋 시 select version as version_ from article where id=1; 발생!
     }
 
     @DisplayName("LockModeType.OPTIMISTIC 모드에서는 조회한 엔티티도 트랜잭션 커밋 시 버전 체크하여 버전이 변경되면 예외를 던진다.")
     @Test
-    void optimisticMode2() {
+    void optimisticMode_concurrentDetected() {
         // given1 - 테스트 데이터 Article 저장
         EntityManager em1 = emf.createEntityManager();
         em1.getTransaction().begin();
@@ -122,4 +131,29 @@ public class OptimisticTest {
                 .isInstanceOf(RollbackException.class)
                 .hasCauseExactlyInstanceOf(OptimisticLockException.class);
     }
+
+    // 이번에는 EntityManager를 직접 사용하는 대신, Spring Data JPA 리포지토리와 Transactional 걸린 서비스를 이용해
+    // LockModeType.OPTIMISTIC 을 테스트한다.
+    @DisplayName("LockModeType.OPTIMISTIC 모드에서는 조회한 엔티티도 트랜잭션 커밋 시 버전 체크한다.")
+    @Test
+    void optimisticMode_transactionalService() {
+        // given - article saved
+        Long id = articleService.saveArticle(new Article("타이틀"));
+
+        // when - Sprint Data JPA 리포지토리와 트랜잭셔널 서비스 메소드 사용
+        Optional<Article> article = articleService.getArticle(id);
+        // 커밋 시 select version as version_ from article where id=1; 발생!
+    }
+
+    @DisplayName("read only 트랜잭셔널 걸린 상태에서도 LockModeType.OPTIMISTIC 모드에서는 조회한 엔티티도 트랜잭션 커밋 시 버전 체크한다.")
+    @Test
+    void optimisticMode_readOnlyTransactionalService() {
+        // given - article saved
+        Long id = articleService.saveArticle(new Article("타이틀"));
+
+        // when - Sprint Data JPA 리포지토리와 readonly 트랜잭셔널 서비스 메소드 사용
+        Optional<Article> article = articleService.getArticleReadOnly(id);
+        // 커밋 시 select version as version_ from article where id=1; 발생!
+    }
+
 }
