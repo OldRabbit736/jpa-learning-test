@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.*;
 
 @Log4j2
 @SpringBootTest
-public class OptimisticTest {
+public class OptimisticLockingTest {
 
     @Autowired
     ArticleRepository articleRepository;
