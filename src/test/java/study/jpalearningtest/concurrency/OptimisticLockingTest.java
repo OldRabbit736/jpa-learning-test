@@ -18,6 +18,7 @@ import study.jpalearningtest.repository.ArticleRepository;
 import study.jpalearningtest.service.ArticleService;
 
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -90,7 +91,7 @@ public class OptimisticLockingTest {
 
     @DisplayName("LockModeType.OPTIMISTIC 모드에서는 조회한 엔티티도 트랜잭션 커밋 시 버전 체크하여 버전이 변경되면 예외를 던진다.")
     @Test
-    void optimisticMode_concurrentDetected() {
+    void optimisticMode_concurrentDetected() throws InterruptedException {
         // given1 - 테스트 데이터 Article 저장
         EntityManager em1 = emf.createEntityManager();
         em1.getTransaction().begin();
@@ -106,6 +107,7 @@ public class OptimisticLockingTest {
                 LockModeType.OPTIMISTIC);
 
         assertThat(foundArticle.getVersion()).isEqualTo(0);
+        CountDownLatch latch = new CountDownLatch(1);
 
         // when - 트랜잭션2에서 Article 수정 (버전 변경)
         try (ExecutorService es = Executors.newFixedThreadPool(1)) {
@@ -122,8 +124,12 @@ public class OptimisticLockingTest {
                 // update article set title='타이틀2',version=1 where id=1 and version=0;
                 em2.getTransaction().commit();
                 log.info("트랜잭션2 종료");
+
+                latch.countDown();
             });
         }
+
+        latch.await();
 
         // then - 트랜잭션1에서 조회한 엔티티를 커밋 시점에 버전 체크 하는데, 트랜잭션2가 버전을 변경하였으므로 예외 발생
         // select version as version_ from article where id=1;
